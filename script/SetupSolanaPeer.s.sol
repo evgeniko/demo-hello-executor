@@ -12,7 +12,7 @@ import {HelloWormhole} from "src/HelloWormhole.sol";
  * The emitter PDA is derived on-chain as: PDA(["emitter"], programId)
  *
  * To derive the emitter PDA from a Solana program ID:
- *   // TypeScript (using @solana/web3.js)
+ *   // TypeScript (using the solana/web3.js package)
  *   const [emitterPda] = PublicKey.findProgramAddressSync(
  *       [Buffer.from("emitter")],
  *       new PublicKey("5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp")
