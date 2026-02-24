@@ -12,7 +12,7 @@ import {HelloWormhole} from "src/HelloWormhole.sol";
  * The emitter PDA is derived on-chain as: PDA(["emitter"], programId)
  *
  * To derive the emitter PDA from a Solana program ID:
- *   // TypeScript (using @solana/web3.js)
+ *   // TypeScript (using the solana/web3.js package)
  *   const [emitterPda] = PublicKey.findProgramAddressSync(
  *       [Buffer.from("emitter")],
  *       new PublicKey("5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp")
@@ -27,7 +27,7 @@ import {HelloWormhole} from "src/HelloWormhole.sol";
 contract SetupSolanaPeerScript is Script {
     // Wormhole chain ID for Solana
     uint16 constant CHAIN_ID_SOLANA = 1;
-    
+
     // Default: emitter PDA of program 5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp
     // Derived via PDA(["emitter"], programId) — this is what Wormhole sees as the sender
     bytes32 constant DEFAULT_SOLANA_EMITTER_PDA = 0x47c51f36dcb45b5bbdba739f0fa993b142f908f06095def3775428b46361b9d3;
@@ -36,7 +36,7 @@ contract SetupSolanaPeerScript is Script {
 
     function run() public {
         address localContract = vm.envAddress("HELLO_WORMHOLE_SEPOLIA_CROSSVM");
-        
+
         // Try to get custom emitter PDA, fall back to default
         bytes32 solanaEmitterPda;
         try vm.envBytes32("SOLANA_PROGRAM_ID_BYTES32") returns (bytes32 val) {

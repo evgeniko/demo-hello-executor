@@ -90,7 +90,7 @@ contract HelloWormholeTest is Test {
         assertEq(helloWormholeSepolia.peers(CHAIN_ID_SOLANA), solanaPeer);
     }
 
-    function test_SendGreetingWithMsgValueEmitsEvent() public {
+    function test_SendGreetingWithMsgValueRevertsWithMockExecutor() public {
         vm.selectFork(sepoliaFork);
 
         // Register a Solana peer
@@ -98,9 +98,8 @@ contract HelloWormholeTest is Test {
         bytes32 solanaPeer = bytes32(0x47c51f36dcb45b5bbdba739f0fa993b142f908f06095def3775428b46361b9d3);
         helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaPeer);
 
-        // sendGreetingWithMsgValue should emit GreetingSent
-        // Note: this will revert at the executor level (mock address), but we can test
-        // that the function signature is correct and accessible
+        // This call reverts at the executor layer because tests use a mock executor.
+        // The test validates callable surface for SVM-specific msgValue path.
         uint128 gasLimit = 500000;
         uint128 msgValue = 15_000_000; // lamports
 

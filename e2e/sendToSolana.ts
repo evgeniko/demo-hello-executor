@@ -38,7 +38,28 @@ const ABI = [
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
 ];
 
-async function getExecutorQuote(srcChain: number, dstChain: number, gasLimit: number = 500000, msgValueLamports: bigint = 0n) {
+interface QuoteResponse {
+    signedQuote: string;
+    estimatedCost?: string;
+}
+
+interface QuoteWithCost extends QuoteResponse {
+    estimatedCost: string;
+    parsedQuote: ReturnType<typeof parseSignedQuote>;
+}
+
+interface ExecutorStatusItem {
+    status: string;
+    txs?: Array<{ txHash?: string }>;
+    failureCause?: string;
+}
+
+async function getExecutorQuote(
+    srcChain: number,
+    dstChain: number,
+    gasLimit: number = 500000,
+    msgValueLamports: bigint = 0n
+): Promise<QuoteWithCost> {
     // Create relay instructions with gasLimit and msgValue
     // For Solana destinations, msgValue should be in LAMPORTS
     const relayInstructions = createRelayInstructions(BigInt(gasLimit), msgValueLamports);
@@ -63,7 +84,7 @@ async function getExecutorQuote(srcChain: number, dstChain: number, gasLimit: nu
         throw new Error(`Failed to get quote: ${await response.text()}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as QuoteResponse;
     
     // Parse quote for debugging/logging
     const parsed = parseSignedQuote(data.signedQuote);
@@ -83,7 +104,7 @@ async function getExecutorQuote(srcChain: number, dstChain: number, gasLimit: nu
     };
 }
 
-async function checkStatus(txHash: string): Promise<any> {
+async function checkStatus(txHash: string): Promise<ExecutorStatusItem | null> {
     const response = await fetch(`${EXECUTOR_API}/status/tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,7 +112,7 @@ async function checkStatus(txHash: string): Promise<any> {
     });
 
     if (!response.ok) return null;
-    const data = await response.json();
+    const data = (await response.json()) as ExecutorStatusItem[];
     return data[0] || null;
 }
 
