@@ -110,7 +110,6 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.quoteGreeting(
             CHAIN_ID_BASE_SEPOLIA,
             200000, // gas limit
-            0,      // msgValue (0 for EVM destinations)
             QUOTER_ADDRESS
         );
     }
@@ -126,7 +125,6 @@ contract HelloWormholeOnChainQuoteTest is Test {
         uint256 quote = helloWormholeSepolia.quoteGreeting(
             CHAIN_ID_BASE_SEPOLIA,
             200000, // gas limit
-            0,      // msgValue (0 for EVM destinations)
             QUOTER_ADDRESS
         );
 
@@ -142,7 +140,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.setPeer(CHAIN_ID_BASE_SEPOLIA, peerAddress);
 
         // Get quote
-        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, 0, QUOTER_ADDRESS);
+        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, QUOTER_ADDRESS);
 
         // Fund the test contract
         vm.deal(address(this), totalCost);
@@ -165,7 +163,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.setPeer(CHAIN_ID_BASE_SEPOLIA, peerAddress);
 
         // Get quote
-        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, 0, QUOTER_ADDRESS);
+        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, QUOTER_ADDRESS);
 
         // Fund the test contract
         vm.deal(address(this), totalCost);

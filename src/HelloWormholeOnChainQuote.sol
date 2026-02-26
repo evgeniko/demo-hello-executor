@@ -18,6 +18,13 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - Uses `executorQuoterRouter` instead of `executor` address
  * - sendGreeting takes `quoterAddress` instead of `signedQuote`
  * - Provides `quoteGreeting()` for on-chain cost estimation
+ *
+ * ## SVM (Solana) destinations
+ * The `vaaEmitters` mapping and `_checkPeer` override are in place so that
+ * incoming VAAs from Solana can be verified correctly (emitter PDA ≠ program ID).
+ * However, *sending* to Solana via the on-chain quoter is not yet supported:
+ * it is unknown whether the deployed `executorQuoterRouter` has pricing data
+ * for SVM chains. Use HelloWormhole (off-chain signed quotes) for EVM→Solana.
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
     using SequenceReplayProtectionLib for *;
@@ -99,22 +106,20 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         if (msg.value > 0) {
             revert NoValueAllowed();
         }
-        // Decode the payload to extract the greeting message
         string memory greeting = string(payload);
-
-        // Emit an event with the greeting message and sender details
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
     /**
      * @notice Get a quote for sending a greeting using on-chain quoter
+     * @dev EVM destinations only. SVM destination support via on-chain quoter
+     *      is not yet verified — use HelloWormhole for EVM→Solana.
      * @param targetChain The Wormhole chain ID of the destination
-     * @param gasLimit Gas limit / compute units for execution on target chain
-     * @param msgValue Native token amount for destination (0 for EVM, lamports for Solana)
+     * @param gasLimit Gas limit for execution on target chain
      * @param quoterAddress The on-chain quoter contract address
      * @return totalCost The total cost including Wormhole message fee and executor fee
      */
-    function quoteGreeting(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress)
+    function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddress)
         external
         view
         returns (uint256 totalCost)
@@ -122,32 +127,30 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         bytes32 peerAddress = peers[targetChain];
         require(peerAddress != bytes32(0), "No peer set for target chain");
 
-        // Build relay instructions including any msgValue forwarding
-        bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, msgValue);
+        bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, 0);
 
-        // Build request bytes (same format as _publishAndCompose uses)
         bytes memory requestBytes = RequestLib.encodeVaaMultiSigRequest(
             _chainId,
             toUniversalAddress(address(this)),
             0 // sequence placeholder - not needed for quote
         );
 
-        // Get executor quote from on-chain quoter
         uint256 executorFee = _executorQuoterRouter.quoteExecution(
             targetChain,
             peerAddress,
-            address(0), // refund address not needed for quote
+            address(0),
             quoterAddress,
             requestBytes,
             relayInstructions
         );
 
-        // Total = executor fee + Wormhole message fee
         totalCost = executorFee + _coreBridge.messageFee();
     }
 
     /**
-     * @notice Send a cross-chain greeting using on-chain quote (EVM destinations)
+     * @notice Send a cross-chain greeting using on-chain quote
+     * @dev EVM destinations only. SVM destination support via on-chain quoter
+     *      is not yet verified — use HelloWormhole for EVM→Solana.
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
@@ -162,29 +165,6 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         uint256 totalCost,
         address quoterAddress
     ) external payable returns (uint64 sequence) {
-        return sendGreetingWithMsgValue(greeting, targetChain, gasLimit, 0, totalCost, quoterAddress);
-    }
-
-    /**
-     * @notice Send a cross-chain greeting with custom msgValue (for SVM destinations)
-     * @dev For EVM→Solana, msgValue is in LAMPORTS (e.g. 15_000_000 ≈ 0.015 SOL for rent/fees).
-     *      Requires setPeer(solanaChainId, programId) AND setVaaEmitter(solanaChainId, emitterPda).
-     * @param greeting The message to send
-     * @param targetChain Wormhole chain ID of the destination
-     * @param gasLimit Gas / compute units for execution on target chain
-     * @param msgValue Native token amount for destination (lamports for Solana, wei for EVM)
-     * @param totalCost Total cost (Wormhole fee + executor fee)
-     * @param quoterAddress The on-chain quoter contract address
-     * @return sequence The Wormhole sequence number
-     */
-    function sendGreetingWithMsgValue(
-        string calldata greeting,
-        uint16 targetChain,
-        uint128 gasLimit,
-        uint128 msgValue,
-        uint256 totalCost,
-        address quoterAddress
-    ) public payable returns (uint64 sequence) {
         sequence = _publishAndRelay(
             bytes(greeting),
             CONSISTENCY_LEVEL_INSTANT,
@@ -193,7 +173,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
             msg.sender,
             quoterAddress,
             gasLimit,
-            msgValue,
+            0,
             ""
         );
         emit GreetingSent(greeting, targetChain, sequence);
