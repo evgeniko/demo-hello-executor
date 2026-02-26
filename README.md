@@ -167,6 +167,10 @@ hello.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPdaBytes32);
 
 - **Solana side:** Register the EVM contract address as bytes32
 
+> ⚠️ **Message size limit:** The Solana receiver enforces a **512-byte** max on greeting messages
+> (`GREETING_MAX_LENGTH` in `receive_greeting.rs`). The EVM contract has no such limit —
+> messages longer than 512 bytes will be accepted on Sepolia but fail on Solana with `InvalidMessage`.
+
 Derive both Solana addresses:
 ```typescript
 const programId = new PublicKey("7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG");
