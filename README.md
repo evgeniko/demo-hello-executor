@@ -14,19 +14,27 @@ Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** a
 ### Key Changes for Cross-VM
 
 1. **HelloWormhole.sol** - Added `sendGreetingWithMsgValue()` for SVM destinations
-2. **msgValue** - SVM destinations need ~15M lamports (~0.015 SOL) for rent/fees
-3. **Cost calculation** - Use API's `estimatedCost` directly
+2. **`vaaEmitters` mapping** - Separate registration for VAA verification vs executor routing (see below)
+3. **msgValue** - SVM destinations need ~15M lamports (~0.015 SOL) for rent/fees
+4. **Cost calculation** - Use API's `estimatedCost` directly
 
 ### Cross-VM Peer Registration
 
-For EVM ↔ Solana, peer registration is **asymmetric**:
-- **EVM side:** Register Solana program's **emitter PDA** (not program ID)
-- **Solana side:** Register EVM contract address (as bytes32)
+For EVM ↔ Solana, peer registration requires **two separate addresses** on the EVM side because the Executor uses `peers[chainId]` as a routing address (must be executable), while incoming VAAs carry the **emitter PDA** as their source:
+
+```
+peers[Solana]        = Solana PROGRAM ID   (executor routing — must be executable)
+vaaEmitters[Solana]  = Solana EMITTER PDA  (VAA verification — PDA(["emitter"], programId))
+```
+
+Use `SetupSolanaPeer.s.sol` which calls both `setPeer()` and `setVaaEmitter()`. For EVM↔EVM, only `setPeer()` is needed.
+
+- **Solana side:** Register EVM contract address as bytes32
 
 ### Related
 
 - **Solana repo:** https://github.com/evgeniko/demo-hello-executor-solana
-- **Cross-VM Sepolia contract:** `0x978d3cF51e9358C58a9538933FC3E277C29915C5`
+- **Cross-VM Sepolia contract:** `0x15cEeB2C089D19E754463e1697d69Ad11A6e8841`
 
 ---
 
@@ -147,16 +155,25 @@ sequence = sendGreetingWithMsgValue(
 );
 ```
 
-**Peer registration is asymmetric** for cross-VM:
-- **EVM side:** Register Solana's **emitter PDA** (not program ID) — see `script/SetupSolanaPeer.s.sol`
-- **Solana side:** Register EVM contract address as bytes32
+**Peer registration for cross-VM requires two steps** — see `script/SetupSolanaPeer.s.sol`:
 
-The emitter PDA is derived from the Solana program ID:
+```solidity
+// 1. Program ID → executor routing (must be an executable account on Solana)
+hello.setPeer(CHAIN_ID_SOLANA, solanaProgramIdBytes32);
+
+// 2. Emitter PDA → VAA verification (PDA(["emitter"], programId))
+hello.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPdaBytes32);
+```
+
+- **Solana side:** Register the EVM contract address as bytes32
+
+Derive both Solana addresses:
 ```typescript
-const [emitterPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("emitter")],
-    programId
-);
+const programId = new PublicKey("7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG");
+const [emitterPda] = PublicKey.findProgramAddressSync([Buffer.from("emitter")], programId);
+
+const programIdBytes32  = '0x' + Buffer.from(programId.toBytes()).toString('hex');
+const emitterPdaBytes32 = '0x' + Buffer.from(emitterPda.toBytes()).toString('hex');
 ```
 
 See the [Solana demo repo](https://github.com/evgeniko/demo-hello-executor-solana) for the full Solana-side implementation.
