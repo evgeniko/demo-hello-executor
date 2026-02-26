@@ -7,6 +7,7 @@ import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { createRelayInstructions } from './relay.js';
 import { parseSignedQuote, calculateEstimatedCost } from './executor.js';
 
@@ -16,9 +17,13 @@ dotenv.config({ path: join(__dirname, '.env') });
 
 // Configuration
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
-// Updated contract with sendGreetingWithMsgValue support for Solana
-const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x978d3cF51e9358C58a9538933FC3E277C29915C5';
+const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x15cEeB2C089D19E754463e1697d69Ad11A6e8841';
 const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
+
+// Solana delivery verification
+const SOLANA_RPC = process.env.SOLANA_DEVNET_RPC || 'https://api.devnet.solana.com';
+// HelloExecutor Solana program ID — receives the message
+const SOLANA_PROGRAM_ID = process.env.HELLO_EXECUTOR_SOLANA_PROGRAM_ID || '7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG';
 
 // Chain IDs
 const CHAIN_ID_SOLANA = 1;
@@ -116,6 +121,55 @@ async function checkStatus(txHash: string): Promise<ExecutorStatusItem | null> {
     return data[0] || null;
 }
 
+/**
+ * Poll the Solana received PDA to confirm on-chain delivery.
+ *
+ * The `received` PDA is created by the HelloExecutor program when it processes
+ * the VAA. Its existence proves that:
+ *  1. The Executor posted the VAA to Wormhole Core Bridge on Solana
+ *  2. HelloExecutor's receive_greeting instruction executed successfully
+ *  3. Replay protection is now in place for this (chain, sequence) pair
+ *
+ * Seeds: ["received", emitter_chain_le_u16, sequence_le_u64]
+ */
+async function pollSolanaDelivery(
+    emitterChain: number,  // Wormhole chain ID of the sender (10002 for Sepolia)
+    sequence: bigint,      // VAA sequence from the GreetingSent event
+    timeoutMs = 120_000,
+): Promise<{ delivered: boolean; pdaAddress: string }> {
+    const connection = new Connection(SOLANA_RPC, 'confirmed');
+    const programId = new PublicKey(SOLANA_PROGRAM_ID);
+
+    const chainBuffer = Buffer.alloc(2);
+    chainBuffer.writeUInt16LE(emitterChain);
+    const seqBuffer = Buffer.alloc(8);
+    seqBuffer.writeBigUInt64LE(sequence);
+
+    const [receivedPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('received'), chainBuffer, seqBuffer],
+        programId,
+    );
+    const pdaAddress = receivedPda.toBase58();
+
+    console.log(`\n🔍 Polling Solana received PDA: ${pdaAddress}`);
+    console.log(`   (chain=${emitterChain}, seq=${sequence})`);
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        process.stdout.write('.');
+        const info = await connection.getAccountInfo(receivedPda).catch(() => null);
+        if (info) {
+            console.log('\n✅ Delivered on Solana! received PDA exists.');
+            return { delivered: true, pdaAddress };
+        }
+        await new Promise(r => setTimeout(r, 5000));
+    }
+
+    console.log('\n⚠️  Timed out waiting for Solana delivery — PDA not yet created.');
+    console.log(`   Check manually: solana account ${pdaAddress} --url devnet`);
+    return { delivered: false, pdaAddress };
+}
+
 async function main() {
     const greeting = process.argv[2] || 'Hello Solana from Sepolia! 🌉';
     
@@ -174,22 +228,25 @@ async function main() {
     const receipt = await tx.wait();
     console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
 
-    // Parse GreetingSent event
+    // Parse GreetingSent event — capture sequence for Solana PDA verification
+    let vaaSequence: bigint | undefined;
     const iface = new ethers.Interface(ABI);
     for (const log of receipt.logs) {
         try {
             const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
             if (parsed?.name === 'GreetingSent') {
+                vaaSequence = BigInt(parsed.args[2]);
                 console.log(`\n📨 GreetingSent event:`);
                 console.log(`   Message: ${parsed.args[0]}`);
                 console.log(`   Target Chain: ${parsed.args[1]}`);
-                console.log(`   Sequence: ${parsed.args[2]}`);
+                console.log(`   Sequence: ${vaaSequence}`);
             }
         } catch {}
     }
 
-    // Poll for executor status
+    // Poll executor status (Executor API may lag behind actual delivery for SVM)
     console.log('\n⏳ Waiting for Executor relay...');
+    let executorDelivered = false;
     for (let i = 0; i < 24; i++) { // 2 minutes max
         await new Promise(r => setTimeout(r, 5000));
         process.stdout.write('.');
@@ -197,8 +254,11 @@ async function main() {
         const status = await checkStatus(tx.hash);
         if (status) {
             if (status.status === 'completed') {
-                console.log('\n\n🎉 SUCCESS! Message relayed to Solana!');
-                console.log(`Solana TX: ${status.txs?.[0]?.txHash || 'pending'}`);
+                console.log('\n\n🎉 Executor reports success!');
+                if (status.txs?.[0]?.txHash) {
+                    console.log(`Solana TX: ${status.txs[0].txHash}`);
+                }
+                executorDelivered = true;
                 break;
             } else if (status.status === 'aborted') {
                 console.log(`\n\n❌ Relay aborted: ${status.failureCause}`);
@@ -209,9 +269,21 @@ async function main() {
         }
     }
 
-    console.log('\n\n' + '='.repeat(60));
+    // Verify on-chain delivery by checking the Solana received PDA.
+    // The Executor API may report "submitted" even after delivery — PDA check is ground truth.
+    if (vaaSequence !== undefined) {
+        const result = await pollSolanaDelivery(CHAIN_ID_SEPOLIA, vaaSequence);
+        if (result.delivered) {
+            console.log(`   received PDA: ${result.pdaAddress}`);
+            console.log(`   Explorer: https://explorer.solana.com/account/${result.pdaAddress}?cluster=devnet`);
+        }
+    } else {
+        console.log('\n⚠️  Could not parse GreetingSent event — skipping Solana delivery check');
+    }
+
+    console.log('\n' + '─'.repeat(60));
     console.log('Links:');
-    console.log(`  Sepolia: https://sepolia.etherscan.io/tx/${tx.hash}`);
+    console.log(`  Sepolia TX:  https://sepolia.etherscan.io/tx/${tx.hash}`);
     console.log(`  Wormholescan: https://wormholescan.io/#/tx/${tx.hash}?network=Testnet`);
 }
 

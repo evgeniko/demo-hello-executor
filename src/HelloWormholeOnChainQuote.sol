@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {ExecutorSendReceiveQuoteOnChain} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceiveQuoteOnChain, InvalidPeer} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
@@ -24,7 +24,15 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
+    // peers[chainId]: executor routing address.
+    //   EVM chains  → the deployed contract address (left-padded to bytes32)
+    //   Solana      → the PROGRAM ID (32 bytes, no padding; must be executable)
     mapping(uint16 => bytes32) public peers;
+
+    // vaaEmitters[chainId]: Wormhole emitter to verify on *incoming* VAAs.
+    //   Leave as bytes32(0) for EVM chains (emitter == peers[chainId]).
+    //   Set to the Solana EMITTER PDA for Solana peers (PDA(["emitter"], programId)).
+    mapping(uint16 => bytes32) public vaaEmitters;
 
     constructor(address coreBridge, address executorQuoterRouter)
         ExecutorSendReceiveQuoteOnChain(coreBridge, executorQuoterRouter)
@@ -38,12 +46,29 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     error NoValueAllowed();
 
+    /// @dev Used by the SDK for executor routing. Must point to an executable account on SVM.
     function _getPeer(uint16 chainId) internal view override returns (bytes32) {
         return peers[chainId];
     }
 
+    /// @dev Override VAA verification to use vaaEmitters when set.
+    ///      Falls back to peers[chainId] for EVM chains (emitter == contract address).
+    function _checkPeer(uint16 chainId, bytes32 peerAddress) internal view override {
+        bytes32 emitter = vaaEmitters[chainId];
+        if (emitter == bytes32(0)) emitter = peers[chainId];
+        if (emitter != peerAddress) revert InvalidPeer();
+    }
+
+    /// @notice Register the executor-routing address for a peer chain.
+    ///         EVM: contract address (left-padded). Solana: program ID (32 bytes).
     function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) {
         peers[chainId] = peerAddress;
+    }
+
+    /// @notice Register the Wormhole emitter for incoming VAA verification.
+    ///         Only required when emitter ≠ peers[chainId] (e.g. Solana emitter PDA).
+    function setVaaEmitter(uint16 chainId, bytes32 emitterAddress) external onlyRole(PEER_ADMIN_ROLE) {
+        vaaEmitters[chainId] = emitterAddress;
     }
 
     function _replayProtect(
@@ -84,11 +109,12 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
     /**
      * @notice Get a quote for sending a greeting using on-chain quoter
      * @param targetChain The Wormhole chain ID of the destination
-     * @param gasLimit Gas limit for execution on target chain
+     * @param gasLimit Gas limit / compute units for execution on target chain
+     * @param msgValue Native token amount for destination (0 for EVM, lamports for Solana)
      * @param quoterAddress The on-chain quoter contract address
      * @return totalCost The total cost including Wormhole message fee and executor fee
      */
-    function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddress)
+    function quoteGreeting(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress)
         external
         view
         returns (uint256 totalCost)
@@ -96,8 +122,8 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         bytes32 peerAddress = peers[targetChain];
         require(peerAddress != bytes32(0), "No peer set for target chain");
 
-        // Build relay instructions
-        bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, 0);
+        // Build relay instructions including any msgValue forwarding
+        bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, msgValue);
 
         // Build request bytes (same format as _publishAndCompose uses)
         bytes memory requestBytes = RequestLib.encodeVaaMultiSigRequest(
@@ -121,7 +147,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
     }
 
     /**
-     * @notice Send a cross-chain greeting using on-chain quote
+     * @notice Send a cross-chain greeting using on-chain quote (EVM destinations)
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
@@ -136,22 +162,40 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         uint256 totalCost,
         address quoterAddress
     ) external payable returns (uint64 sequence) {
-        // Encode the greeting as bytes
-        bytes memory payload = bytes(greeting);
+        return sendGreetingWithMsgValue(greeting, targetChain, gasLimit, 0, totalCost, quoterAddress);
+    }
 
-        // Publish and relay the message to the target chain using on-chain quote
+    /**
+     * @notice Send a cross-chain greeting with custom msgValue (for SVM destinations)
+     * @dev For EVM→Solana, msgValue is in LAMPORTS (e.g. 15_000_000 ≈ 0.015 SOL for rent/fees).
+     *      Requires setPeer(solanaChainId, programId) AND setVaaEmitter(solanaChainId, emitterPda).
+     * @param greeting The message to send
+     * @param targetChain Wormhole chain ID of the destination
+     * @param gasLimit Gas / compute units for execution on target chain
+     * @param msgValue Native token amount for destination (lamports for Solana, wei for EVM)
+     * @param totalCost Total cost (Wormhole fee + executor fee)
+     * @param quoterAddress The on-chain quoter contract address
+     * @return sequence The Wormhole sequence number
+     */
+    function sendGreetingWithMsgValue(
+        string calldata greeting,
+        uint16 targetChain,
+        uint128 gasLimit,
+        uint128 msgValue,
+        uint256 totalCost,
+        address quoterAddress
+    ) public payable returns (uint64 sequence) {
         sequence = _publishAndRelay(
-            payload,
+            bytes(greeting),
             CONSISTENCY_LEVEL_INSTANT,
             totalCost,
             targetChain,
-            msg.sender, // refund address
-            quoterAddress, // on-chain quoter instead of signedQuote
+            msg.sender,
+            quoterAddress,
             gasLimit,
-            0, // no msg.value forwarding
-            "" // no extra relay instructions
+            msgValue,
+            ""
         );
-
         emit GreetingSent(greeting, targetChain, sequence);
     }
 }

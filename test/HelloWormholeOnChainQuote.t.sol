@@ -73,6 +73,23 @@ contract HelloWormholeOnChainQuoteTest is Test {
         assertEq(helloWormholeSepolia.peers(CHAIN_ID_BASE_SEPOLIA), peerAddress);
     }
 
+    function test_SetSolanaPeer() public {
+        vm.selectFork(sepoliaFork);
+
+        // SVM peers need two registrations:
+        //   peers[chainId]       = program ID  (executor routing)
+        //   vaaEmitters[chainId] = emitter PDA (VAA verification)
+        uint16 CHAIN_ID_SOLANA = 1;
+        bytes32 solanaProgramId  = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        bytes32 solanaEmitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
+
+        helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+        helloWormholeSepolia.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPda);
+
+        assertEq(helloWormholeSepolia.peers(CHAIN_ID_SOLANA), solanaProgramId);
+        assertEq(helloWormholeSepolia.vaaEmitters(CHAIN_ID_SOLANA), solanaEmitterPda);
+    }
+
     function test_SetPeerRevertsForNonAdmin() public {
         vm.selectFork(sepoliaFork);
 
@@ -93,6 +110,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.quoteGreeting(
             CHAIN_ID_BASE_SEPOLIA,
             200000, // gas limit
+            0,      // msgValue (0 for EVM destinations)
             QUOTER_ADDRESS
         );
     }
@@ -108,6 +126,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         uint256 quote = helloWormholeSepolia.quoteGreeting(
             CHAIN_ID_BASE_SEPOLIA,
             200000, // gas limit
+            0,      // msgValue (0 for EVM destinations)
             QUOTER_ADDRESS
         );
 
@@ -123,7 +142,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.setPeer(CHAIN_ID_BASE_SEPOLIA, peerAddress);
 
         // Get quote
-        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, QUOTER_ADDRESS);
+        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, 0, QUOTER_ADDRESS);
 
         // Fund the test contract
         vm.deal(address(this), totalCost);
@@ -146,7 +165,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         helloWormholeSepolia.setPeer(CHAIN_ID_BASE_SEPOLIA, peerAddress);
 
         // Get quote
-        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, QUOTER_ADDRESS);
+        uint256 totalCost = helloWormholeSepolia.quoteGreeting(CHAIN_ID_BASE_SEPOLIA, 200000, 0, QUOTER_ADDRESS);
 
         // Fund the test contract
         vm.deal(address(this), totalCost);
