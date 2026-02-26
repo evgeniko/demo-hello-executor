@@ -80,7 +80,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         //   peers[chainId]       = program ID  (executor routing)
         //   vaaEmitters[chainId] = emitter PDA (VAA verification)
         uint16 CHAIN_ID_SOLANA = 1;
-        bytes32 solanaProgramId  = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
         bytes32 solanaEmitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
 
         helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);

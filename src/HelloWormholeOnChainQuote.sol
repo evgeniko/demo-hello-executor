@@ -136,12 +136,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         );
 
         uint256 executorFee = _executorQuoterRouter.quoteExecution(
-            targetChain,
-            peerAddress,
-            address(0),
-            quoterAddress,
-            requestBytes,
-            relayInstructions
+            targetChain, peerAddress, address(0), quoterAddress, requestBytes, relayInstructions
         );
 
         totalCost = executorFee + _coreBridge.messageFee();

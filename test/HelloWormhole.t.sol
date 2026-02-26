@@ -87,7 +87,7 @@ contract HelloWormholeTest is Test {
         //   vaaEmitters[chainId] = emitter PDA (incoming VAA verification)
         uint16 CHAIN_ID_SOLANA = 1;
         // Program ID: 7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG
-        bytes32 solanaProgramId  = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
         // Emitter PDA: PDA(["emitter"], programId) = 6w49u8Z4D3uqwMrxHF6XXKGUVAuKhkVu6WFarMgamscY
         bytes32 solanaEmitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
 

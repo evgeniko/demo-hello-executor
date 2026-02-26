@@ -36,13 +36,11 @@ contract SetupSolanaPeerScript is Script {
     uint16 constant CHAIN_ID_SOLANA = 1;
 
     // Default: program ID of 7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG (bytes32, no padding)
-    bytes32 constant DEFAULT_SOLANA_PROGRAM_ID =
-        0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f;
+    bytes32 constant DEFAULT_SOLANA_PROGRAM_ID = 0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f;
 
     // Default: emitter PDA of program 7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG
     // Derived via: PublicKey.findProgramAddressSync([Buffer.from("emitter")], programId)
-    bytes32 constant DEFAULT_SOLANA_EMITTER_PDA =
-        0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5;
+    bytes32 constant DEFAULT_SOLANA_EMITTER_PDA = 0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5;
 
     function setUp() public {}
 
