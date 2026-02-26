@@ -244,7 +244,13 @@ async function main() {
         } catch {}
     }
 
-    // Poll executor status (Executor API may lag behind actual delivery for SVM)
+    // Poll executor status.
+    // The Executor API terminal states are:
+    //   "submitted" + txs[] → relay TX included on destination chain (success)
+    //   "error"             → relay failed (execution reverted, etc.)
+    //   "underpaid"         → insufficient payment
+    // Non-terminal: "pending", "processing".
+    // Note: the Executor never emits "completed"; "submitted" is the delivered state.
     console.log('\n⏳ Waiting for Executor relay...');
     let executorDelivered = false;
     for (let i = 0; i < 24; i++) { // 2 minutes max
@@ -253,15 +259,17 @@ async function main() {
 
         const status = await checkStatus(tx.hash);
         if (status) {
-            if (status.status === 'completed') {
-                console.log('\n\n🎉 Executor reports success!');
-                if (status.txs?.[0]?.txHash) {
-                    console.log(`Solana TX: ${status.txs[0].txHash}`);
-                }
+            if (status.status === 'submitted' && status.txs?.length) {
+                console.log('\n\n🎉 Executor delivered! Solana TX:');
+                console.log(`   ${status.txs[0].txHash}`);
+                console.log(`   https://explorer.solana.com/tx/${status.txs[0].txHash}?cluster=devnet`);
                 executorDelivered = true;
                 break;
-            } else if (status.status === 'aborted') {
-                console.log(`\n\n❌ Relay aborted: ${status.failureCause}`);
+            } else if (status.status === 'error' || status.status === 'aborted') {
+                console.log(`\n\n❌ Relay failed: ${status.failureCause || status.status}`);
+                break;
+            } else if (status.status === 'underpaid') {
+                console.log('\n\n❌ Relay underpaid. Increase SOLANA_MSG_VALUE_LAMPORTS or retry with a fresh quote.');
                 break;
             } else {
                 process.stdout.write(`(${status.status})`);
@@ -269,8 +277,8 @@ async function main() {
         }
     }
 
-    // Verify on-chain delivery by checking the Solana received PDA.
-    // The Executor API may report "submitted" even after delivery — PDA check is ground truth.
+    // Independently verify on-chain delivery by checking the Solana received PDA.
+    // This is the ground truth: PDA existence proves receive_greeting ran successfully.
     if (vaaSequence !== undefined) {
         const result = await pollSolanaDelivery(CHAIN_ID_SEPOLIA, vaaSequence);
         if (result.delivered) {
