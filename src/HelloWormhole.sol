@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {ExecutorSendReceiveQuoteOffChain} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceiveQuoteOffChain, InvalidPeer} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
@@ -11,7 +11,18 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
+    // peers[chainId]: the address the Executor uses to route messages to the peer.
+    //   - EVM chains:   the deployed HelloWormhole contract address (left-padded to bytes32)
+    //   - Solana:       the PROGRAM ID (left-aligned, no padding) — must be executable so
+    //                   the Executor can call it as the VAA resolver
     mapping(uint16 => bytes32) public peers;
+
+    // vaaEmitters[chainId]: the Wormhole emitter address to verify on *incoming* VAAs.
+    //   Only needs to be set when the emitter differs from peers[chainId].
+    //   - EVM chains:   leave as bytes32(0) — emitter == peers[chainId] (same contract)
+    //   - Solana:       set to the EMITTER PDA (the PDA that signs Wormhole messages),
+    //                   because the emitter PDA ≠ program ID
+    mapping(uint16 => bytes32) public vaaEmitters;
 
     constructor(address coreBridge, address executor) ExecutorSendReceiveQuoteOffChain(coreBridge, executor) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -23,12 +34,33 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
 
     error NoValueAllowed();
 
+    /// @dev Used by the SDK for executor routing (dstAddr in relay requests).
+    ///      Must point to an EXECUTABLE account on SVM — i.e., the program ID.
     function _getPeer(uint16 chainId) internal view override returns (bytes32) {
         return peers[chainId];
     }
 
+    /// @dev Used by the SDK to verify the emitter address of incoming VAAs.
+    ///      Falls back to peers[chainId] when vaaEmitters[chainId] is not set
+    ///      (correct for EVM↔EVM where contract == emitter).
+    function _checkPeer(uint16 chainId, bytes32 peerAddress) internal view override {
+        bytes32 emitter = vaaEmitters[chainId];
+        if (emitter == bytes32(0)) emitter = peers[chainId];
+        if (emitter != peerAddress) revert InvalidPeer();
+    }
+
+    /// @notice Register the executor-routing address for a peer chain.
+    ///         For EVM chains: the HelloWormhole contract address (left-padded).
+    ///         For Solana:     the program ID (32 bytes, no padding).
     function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) {
         peers[chainId] = peerAddress;
+    }
+
+    /// @notice Register the Wormhole emitter address for incoming VAA verification.
+    ///         Only needed when emitter ≠ peers[chainId] (e.g., Solana emitter PDA).
+    ///         Set to bytes32(0) to fall back to peers[chainId].
+    function setVaaEmitter(uint16 chainId, bytes32 emitterAddress) external onlyRole(PEER_ADMIN_ROLE) {
+        vaaEmitters[chainId] = emitterAddress;
     }
 
     function _replayProtect(

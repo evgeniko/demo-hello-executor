@@ -8,38 +8,55 @@ import {HelloWormhole} from "src/HelloWormhole.sol";
  * @title SetupSolanaPeer
  * @notice Sets up a Solana program as a peer on the EVM HelloWormhole contract
  *
- * IMPORTANT: Register the Solana program's **emitter PDA**, NOT the program ID!
- * The emitter PDA is derived on-chain as: PDA(["emitter"], programId)
+ * For SVM ↔ EVM messaging, peer registration requires TWO separate addresses:
  *
- * To derive the emitter PDA from a Solana program ID:
- *   // TypeScript (using the solana/web3.js package)
- *   const [emitterPda] = PublicKey.findProgramAddressSync(
- *       [Buffer.from("emitter")],
- *       new PublicKey("5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp")
- *   );
- *   // Then convert to bytes32: '0x' + Buffer.from(emitterPda.toBytes()).toString('hex')
- *   // → 0xb7df8ac821c5ff824eeb235f59153edf3f93b021d81150e1988884f9f450eeef
+ *   1. peers[Solana]       = PROGRAM ID (bytes32, no padding)
+ *      Used by the Executor to route relay requests — must be an executable account.
+ *
+ *   2. vaaEmitters[Solana] = EMITTER PDA (bytes32, no padding)
+ *      Used to verify incoming VAAs from Solana — the PDA that signs Wormhole messages.
+ *      Derived as: PDA(["emitter"], programId)
+ *
+ * To compute these values from a Solana program ID (TypeScript):
+ *
+ *   const programId = new PublicKey("7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG");
+ *   const [emitterPda] = PublicKey.findProgramAddressSync([Buffer.from("emitter")], programId);
+ *
+ *   const programIdBytes32 = '0x' + Buffer.from(programId.toBytes()).toString('hex');
+ *   const emitterPdaBytes32 = '0x' + Buffer.from(emitterPda.toBytes()).toString('hex');
  *
  * Usage:
  *   export HELLO_WORMHOLE_SEPOLIA_CROSSVM=0x...
- *   export SOLANA_EMITTER_PDA_BYTES32=0x... (emitter PDA as bytes32, NOT the program ID)
+ *   export SOLANA_PROGRAM_ID_BYTES32=0x...  (program ID as bytes32, no padding)
+ *   export SOLANA_EMITTER_PDA_BYTES32=0x... (emitter PDA as bytes32, no padding)
  *   forge script script/SetupSolanaPeer.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
  */
 contract SetupSolanaPeerScript is Script {
     // Wormhole chain ID for Solana
     uint16 constant CHAIN_ID_SOLANA = 1;
 
-    // Default: emitter PDA of program 5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp
+    // Default: program ID of 7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG (bytes32, no padding)
+    bytes32 constant DEFAULT_SOLANA_PROGRAM_ID =
+        0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f;
+
+    // Default: emitter PDA of program 7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG
     // Derived via: PublicKey.findProgramAddressSync([Buffer.from("emitter")], programId)
-    // ⚠️  This is the PDA, NOT the program ID! They are different values.
-    bytes32 constant DEFAULT_SOLANA_EMITTER_PDA = 0xb7df8ac821c5ff824eeb235f59153edf3f93b021d81150e1988884f9f450eeef;
+    bytes32 constant DEFAULT_SOLANA_EMITTER_PDA =
+        0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5;
 
     function setUp() public {}
 
     function run() public {
         address localContract = vm.envAddress("HELLO_WORMHOLE_SEPOLIA_CROSSVM");
 
-        // Try to get custom emitter PDA, fall back to default
+        // Try to get custom values, fall back to defaults
+        bytes32 solanaProgramId;
+        try vm.envBytes32("SOLANA_PROGRAM_ID_BYTES32") returns (bytes32 val) {
+            solanaProgramId = val;
+        } catch {
+            solanaProgramId = DEFAULT_SOLANA_PROGRAM_ID;
+        }
+
         bytes32 solanaEmitterPda;
         try vm.envBytes32("SOLANA_EMITTER_PDA_BYTES32") returns (bytes32 val) {
             solanaEmitterPda = val;
@@ -49,15 +66,23 @@ contract SetupSolanaPeerScript is Script {
 
         console.log("Setting up Solana peer on Sepolia HelloWormhole");
         console.log("Local contract:", localContract);
+        console.log("Solana program ID (bytes32):", vm.toString(solanaProgramId));
         console.log("Solana emitter PDA (bytes32):", vm.toString(solanaEmitterPda));
         console.log("Wormhole chain ID:", CHAIN_ID_SOLANA);
 
         vm.startBroadcast();
 
         HelloWormhole hello = HelloWormhole(localContract);
-        hello.setPeer(CHAIN_ID_SOLANA, solanaEmitterPda);
+
+        // Register program ID for executor routing (dstAddr in relay requests)
+        hello.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+
+        // Register emitter PDA for incoming VAA verification
+        hello.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPda);
 
         console.log("Solana peer set successfully!");
+        console.log("  peers[1]      = program ID  (for executor routing)");
+        console.log("  vaaEmitters[1] = emitter PDA (for VAA verification)");
 
         vm.stopBroadcast();
     }
