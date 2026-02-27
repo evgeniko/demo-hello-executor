@@ -122,6 +122,22 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
         uint256 totalCost,
         bytes calldata signedQuote
     ) external payable returns (uint64 sequence) {
-        return sendGreetingWithMsgValue(greeting, targetChain, gasLimit, 0, totalCost, signedQuote);
+        // Encode the greeting as bytes
+        bytes memory payload = bytes(greeting);
+
+        // Publish and relay the message to the target chain
+        sequence = _publishAndRelay(
+            payload,
+            CONSISTENCY_LEVEL_INSTANT, // choose safe or finalized based on your needs
+            totalCost,
+            targetChain,
+            msg.sender, // refund address
+            signedQuote,
+            gasLimit,
+            0, // no msg.value forwarding
+            "" // no extra relay instructions
+        );
+
+        emit GreetingSent(greeting, targetChain, sequence);
     }
 }
