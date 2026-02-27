@@ -69,7 +69,8 @@ async function getExecutorQuote(
     // For Solana destinations, msgValue should be in LAMPORTS
     const relayInstructions = createRelayInstructions(BigInt(gasLimit), msgValueLamports);
     
-    console.log(`\n📋 Relay Instructions:`);
+    console.log(`
+Relay Instructions:`);
     console.log(`   gasLimit: ${gasLimit} (compute units)`);
     console.log(`   msgValue: ${msgValueLamports} lamports (${Number(msgValueLamports) / 1e9} SOL)`);
     console.log(`   encoded:  ${relayInstructions}`);
@@ -151,7 +152,7 @@ async function pollSolanaDelivery(
     );
     const pdaAddress = receivedPda.toBase58();
 
-    console.log(`\n🔍 Polling Solana received PDA: ${pdaAddress}`);
+    console.log(`\nPolling Solana received PDA: ${pdaAddress}`);
     console.log(`   (chain=${emitterChain}, seq=${sequence})`);
 
     const deadline = Date.now() + timeoutMs;
@@ -159,21 +160,21 @@ async function pollSolanaDelivery(
         process.stdout.write('.');
         const info = await connection.getAccountInfo(receivedPda).catch(() => null);
         if (info) {
-            console.log('\n✅ Delivered on Solana! received PDA exists.');
+            console.log('\nDelivered on Solana! received PDA exists.');
             return { delivered: true, pdaAddress };
         }
         await new Promise(r => setTimeout(r, 5000));
     }
 
-    console.log('\n⚠️  Timed out waiting for Solana delivery — PDA not yet created.');
+    console.log('\nTimed out waiting for Solana delivery — PDA not yet created.');
     console.log(`   Check manually: solana account ${pdaAddress} --url devnet`);
     return { delivered: false, pdaAddress };
 }
 
 async function main() {
-    const greeting = process.argv[2] || 'Hello Solana from Sepolia! 🌉';
+    const greeting = process.argv[2] || 'Hello Solana from Sepolia!';
     
-    console.log('🚀 Sending Greeting: Sepolia → Solana\n');
+    console.log('Sending Greeting: Sepolia → Solana\n');
     console.log(`Message: "${greeting}"`);
 
     // Setup provider and wallet
@@ -185,7 +186,7 @@ async function main() {
     console.log(`Balance: ${ethers.formatEther(balance)} ETH`);
 
     // Get quote with Solana-specific msgValue in lamports
-    console.log('\n📊 Getting Executor quote...');
+    console.log('\nGetting Executor quote...');
     const gasLimit = 500000; // For Solana, this is compute units
     // Pass msgValue in LAMPORTS - this tells the Executor how much SOL to use for rent/fees
     const quote = await getExecutorQuote(CHAIN_ID_SEPOLIA, CHAIN_ID_SOLANA, gasLimit, SOLANA_MSG_VALUE_LAMPORTS);
@@ -208,7 +209,7 @@ async function main() {
     const contract = new ethers.Contract(HELLO_WORMHOLE, ABI, wallet);
 
     // Send greeting with msgValue for Solana (in lamports)
-    console.log('\n📤 Sending transaction with msgValue for Solana...');
+    console.log('\nSending transaction with msgValue for Solana...');
     console.log(`   msgValue: ${SOLANA_MSG_VALUE_LAMPORTS} lamports (${Number(SOLANA_MSG_VALUE_LAMPORTS) / 1e9} SOL)`);
     const tx = await contract.sendGreetingWithMsgValue(
         greeting,
@@ -224,9 +225,9 @@ async function main() {
     console.log(`Explorer: https://sepolia.etherscan.io/tx/${tx.hash}`);
 
     // Wait for confirmation
-    console.log('\n⏳ Waiting for confirmation...');
+    console.log('\nWaiting for confirmation...');
     const receipt = await tx.wait();
-    console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
+    console.log(`Confirmed in block ${receipt.blockNumber}`);
 
     // Parse GreetingSent event — capture sequence for Solana PDA verification
     let vaaSequence: bigint | undefined;
@@ -236,7 +237,7 @@ async function main() {
             const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
             if (parsed?.name === 'GreetingSent') {
                 vaaSequence = BigInt(parsed.args[2]);
-                console.log(`\n📨 GreetingSent event:`);
+                console.log(`\nGreetingSent event:`);
                 console.log(`   Message: ${parsed.args[0]}`);
                 console.log(`   Target Chain: ${parsed.args[1]}`);
                 console.log(`   Sequence: ${vaaSequence}`);
@@ -251,7 +252,7 @@ async function main() {
     //   "underpaid"         → insufficient payment
     // Non-terminal: "pending", "processing".
     // Note: the Executor never emits "completed"; "submitted" is the delivered state.
-    console.log('\n⏳ Waiting for Executor relay...');
+    console.log('\nWaiting for Executor relay...');
     let executorDelivered = false;
     for (let i = 0; i < 24; i++) { // 2 minutes max
         await new Promise(r => setTimeout(r, 5000));
@@ -260,16 +261,16 @@ async function main() {
         const status = await checkStatus(tx.hash);
         if (status) {
             if (status.status === 'submitted' && status.txs?.length) {
-                console.log('\n\n🎉 Executor delivered! Solana TX:');
+                console.log('\n\nExecutor delivered! Solana TX:');
                 console.log(`   ${status.txs[0].txHash}`);
                 console.log(`   https://explorer.solana.com/tx/${status.txs[0].txHash}?cluster=devnet`);
                 executorDelivered = true;
                 break;
             } else if (status.status === 'error' || status.status === 'aborted') {
-                console.log(`\n\n❌ Relay failed: ${status.failureCause || status.status}`);
+                console.log(`\n\nRelay failed: ${status.failureCause || status.status}`);
                 break;
             } else if (status.status === 'underpaid') {
-                console.log('\n\n❌ Relay underpaid. Increase SOLANA_MSG_VALUE_LAMPORTS or retry with a fresh quote.');
+                console.log('\n\nRelay underpaid. Increase SOLANA_MSG_VALUE_LAMPORTS or retry with a fresh quote.');
                 break;
             } else {
                 process.stdout.write(`(${status.status})`);
@@ -286,7 +287,7 @@ async function main() {
             console.log(`   Explorer: https://explorer.solana.com/account/${result.pdaAddress}?cluster=devnet`);
         }
     } else {
-        console.log('\n⚠️  Could not parse GreetingSent event — skipping Solana delivery check');
+        console.log('\nCould not parse GreetingSent event — skipping Solana delivery check');
     }
 
     console.log('\n' + '─'.repeat(60));

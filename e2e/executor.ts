@@ -141,7 +141,7 @@ export async function getExecutorQuote(
             const cost = calculateEstimatedCost(parsedQuote, defaultGasLimit);
             estimatedCost = cost.toString();
             
-            console.log('\n💰 Quote received:');
+            console.log('\nQuote received:');
             console.log('  Signed quote:', signedQuote.substring(0, 30) + '...');
             console.log('  Parsed quote params:');
             console.log('    baseFee:', parsedQuote.baseFee.toString());
@@ -151,8 +151,8 @@ export async function getExecutorQuote(
             console.log('  Estimated cost (500k gas):', estimatedCost, 'wei');
             console.log('                          =', Number(cost) / 1e18, 'ETH');
         } catch (parseError) {
-            console.warn('⚠️  Could not parse quote for cost estimate:', parseError);
-            console.log('\n💰 Quote received:');
+            console.warn('Could not parse quote for cost estimate:', parseError);
+            console.log('\nQuote received:');
             console.log('  Signed quote:', signedQuote.substring(0, 30) + '...');
             console.log('  Estimated cost: unknown (parse failed)');
         }
