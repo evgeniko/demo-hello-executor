@@ -29,10 +29,11 @@ const SOLANA_PROGRAM_ID = process.env.HELLO_EXECUTOR_SOLANA_PROGRAM_ID || '7eiTq
 const CHAIN_ID_SOLANA = 1;
 const CHAIN_ID_SEPOLIA = 10002; // update this when targeting a different EVM chain
 
-// Executor API
-// Testnet: https://executor-testnet.labsapis.com/v0
-// Mainnet: https://executor.labsapis.com/v0
-const EXECUTOR_API = process.env.EXECUTOR_API_URL || 'https://executor-testnet.labsapis.com/v0';
+// Network toggle — switch to 'mainnet' when deploying to production
+const NETWORK: 'testnet' | 'mainnet' = 'testnet';
+const EXECUTOR_API = NETWORK === 'mainnet'
+    ? 'https://executor.labsapis.com/v0'
+    : 'https://executor-testnet.labsapis.com/v0';
 
 // Solana-specific: msgValue in LAMPORTS for rent, priority fees, etc.
 // Based on NTT demo: 10_000_000 + 1_500_000 = 11,500,000 lamports (~0.0115 SOL)
