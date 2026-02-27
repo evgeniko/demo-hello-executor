@@ -23,9 +23,9 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
 const CHAIN_ID_SOLANA = 1;
 const CHAIN_ID_SEPOLIA = 10002; // update this when targeting a different EVM chain
 
-// Network toggle — switch to 'mainnet' when deploying to production
-const NETWORK: 'testnet' | 'mainnet' = 'testnet';
-const EXECUTOR_API = NETWORK === 'mainnet'
+// Network toggle — set to true when deploying to production
+const MAINNET = false;
+const EXECUTOR_API = MAINNET
     ? 'https://executor.labsapis.com/v0'
     : 'https://executor-testnet.labsapis.com/v0';
 
@@ -230,7 +230,7 @@ async function main() {
     console.log('\n' + '─'.repeat(60));
     console.log('Links:');
     console.log(`  Sepolia TX:  https://sepolia.etherscan.io/tx/${tx.hash}`);
-    const wormholescanNetwork = NETWORK === 'mainnet' ? 'Mainnet' : 'Testnet';
+    const wormholescanNetwork = MAINNET ? 'Mainnet' : 'Testnet';
     console.log(`  Wormholescan: https://wormholescan.io/#/tx/${tx.hash}?network=${wormholescanNetwork}`);
     console.log('  (Wormholescan shows full cross-chain delivery status including Solana)');
 }
