@@ -17,7 +17,6 @@ const HELLO_WORMHOLE_OC_ABI = [
     'function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddress) external view returns (uint256 totalCost)',
     'function sendGreeting(string calldata greeting, uint16 targetChain, uint128 gasLimit, uint256 totalCost, address quoterAddress) external payable returns (uint64 sequence)',
     'function peers(uint16 chainId) external view returns (bytes32)',
-    'function vaaEmitters(uint16 chainId) external view returns (bytes32)',
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
     'event GreetingReceived(string greeting, uint16 senderChain, bytes32 sender)',
 ];

@@ -60,6 +60,10 @@ function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddre
 function sendGreeting(..., address quoterAddress) external payable;
 ```
 
+> **Note:** On-chain quotes currently support EVM destination chains only.
+> For EVM → Solana, use `HelloWormhole` (off-chain signed quotes) instead.
+> Solana support will be added once the on-chain quoter supports SVM pricing.
+
 ## Deployed Contracts (Testnet)
 
 | Chain        | HelloWormhole (Off-chain)                    | HelloWormholeOnChainQuote                    |

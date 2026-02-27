@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {ExecutorSendReceiveQuoteOnChain, InvalidPeer} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceiveQuoteOnChain} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
@@ -19,27 +19,20 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - sendGreeting takes `quoterAddress` instead of `signedQuote`
  * - Provides `quoteGreeting()` for on-chain cost estimation
  *
- * ## SVM (Solana) destinations
- * The `vaaEmitters` mapping and `_checkPeer` override are in place so that
- * incoming VAAs from Solana can be verified correctly (emitter PDA ≠ program ID).
- * However, *sending* to Solana via the on-chain quoter is not yet supported:
- * it is unknown whether the deployed `executorQuoterRouter` has pricing data
- * for SVM chains. Use HelloWormhole (off-chain signed quotes) for EVM→Solana.
+ * ## EVM-only
+ * On-chain quotes are currently supported for EVM destination chains only.
+ * For EVM → Solana, use HelloWormhole (off-chain signed quotes) instead.
+ * SVM support will be added in a future update once the on-chain quoter
+ * supports Solana pricing.
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
     using SequenceReplayProtectionLib for *;
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
-    // peers[chainId]: executor routing address.
-    //   EVM chains  → the deployed contract address (left-padded to bytes32)
-    //   Solana      → the PROGRAM ID (32 bytes, no padding; must be executable)
+    // peers[chainId]: the deployed HelloWormholeOnChainQuote contract address on that chain
+    //   (left-padded to bytes32). EVM chains only — see contract NatSpec.
     mapping(uint16 => bytes32) public peers;
-
-    // vaaEmitters[chainId]: Wormhole emitter to verify on *incoming* VAAs.
-    //   Leave as bytes32(0) for EVM chains (emitter == peers[chainId]).
-    //   Set to the Solana EMITTER PDA for Solana peers (PDA(["emitter"], programId)).
-    mapping(uint16 => bytes32) public vaaEmitters;
 
     constructor(address coreBridge, address executorQuoterRouter)
         ExecutorSendReceiveQuoteOnChain(coreBridge, executorQuoterRouter)
@@ -53,29 +46,13 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     error NoValueAllowed();
 
-    /// @dev Used by the SDK for executor routing. Must point to an executable account on SVM.
     function _getPeer(uint16 chainId) internal view override returns (bytes32) {
         return peers[chainId];
     }
 
-    /// @dev Override VAA verification to use vaaEmitters when set.
-    ///      Falls back to peers[chainId] for EVM chains (emitter == contract address).
-    function _checkPeer(uint16 chainId, bytes32 peerAddress) internal view override {
-        bytes32 emitter = vaaEmitters[chainId];
-        if (emitter == bytes32(0)) emitter = peers[chainId];
-        if (emitter != peerAddress) revert InvalidPeer();
-    }
-
-    /// @notice Register the executor-routing address for a peer chain.
-    ///         EVM: contract address (left-padded). Solana: program ID (32 bytes).
+    /// @notice Register the peer contract address for a destination EVM chain.
     function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) {
         peers[chainId] = peerAddress;
-    }
-
-    /// @notice Register the Wormhole emitter for incoming VAA verification.
-    ///         Only required when emitter ≠ peers[chainId] (e.g. Solana emitter PDA).
-    function setVaaEmitter(uint16 chainId, bytes32 emitterAddress) external onlyRole(PEER_ADMIN_ROLE) {
-        vaaEmitters[chainId] = emitterAddress;
     }
 
     function _replayProtect(
