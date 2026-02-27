@@ -4,40 +4,6 @@ Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** a
 
 > **License:** Code provided "AS IS", without warranties. Audit before mainnet deployment.
 
-## Cross-VM Status (EVM ↔ Solana)
-
-| Route | Status |
-|-------|--------|
-| Sepolia → Solana | Working |
-| Solana → Sepolia | Working |
-
-### Key Changes for Cross-VM
-
-1. **HelloWormhole.sol** - Added `sendGreetingWithMsgValue()` for SVM destinations
-2. **`vaaEmitters` mapping** - Separate registration for VAA verification vs executor routing (see below)
-3. **msgValue** - SVM destinations need ~15M lamports (~0.015 SOL) for rent/fees
-4. **Cost calculation** - Use API's `estimatedCost` directly
-
-### Cross-VM Peer Registration
-
-For EVM ↔ Solana, peer registration requires **two separate addresses** on the EVM side because the Executor uses `peers[chainId]` as a routing address (must be executable), while incoming VAAs carry the **emitter PDA** as their source:
-
-```
-peers[Solana]        = Solana PROGRAM ID   (executor routing — must be executable)
-vaaEmitters[Solana]  = Solana EMITTER PDA  (VAA verification — PDA(["emitter"], programId))
-```
-
-Use `SetupSolanaPeer.s.sol` which calls both `setPeer()` and `setVaaEmitter()`. For EVM↔EVM, only `setPeer()` is needed.
-
-- **Solana side:** Register EVM contract address as bytes32
-
-### Related
-
-- **Solana repo:** https://github.com/evgeniko/demo-hello-executor-solana
-- **Cross-VM Sepolia contract:** `0x15cEeB2C089D19E754463e1697d69Ad11A6e8841`
-
----
-
 ## Contracts
 
 | Contract                    | Quote Method    | Base Class                         | Constructor Param      |
