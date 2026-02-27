@@ -7,7 +7,6 @@ import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { Connection, PublicKey } from '@solana/web3.js';
 import { createRelayInstructions } from './relay.js';
 import { parseSignedQuote, calculateEstimatedCost } from './executor.js';
 
@@ -19,11 +18,6 @@ dotenv.config({ path: join(__dirname, '.env') });
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
 const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x15cEeB2C089D19E754463e1697d69Ad11A6e8841';
 const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
-
-// Solana delivery verification
-const SOLANA_RPC = process.env.SOLANA_DEVNET_RPC || 'https://api.devnet.solana.com';
-// HelloExecutor Solana program ID — receives the message
-const SOLANA_PROGRAM_ID = process.env.HELLO_EXECUTOR_SOLANA_PROGRAM_ID || '7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG';
 
 // Wormhole chain IDs — full reference: https://wormhole.com/docs/products/reference/chain-ids/
 const CHAIN_ID_SOLANA = 1;
@@ -123,55 +117,6 @@ async function checkStatus(txHash: string): Promise<ExecutorStatusItem | null> {
     if (!response.ok) return null;
     const data = (await response.json()) as ExecutorStatusItem[];
     return data[0] || null;
-}
-
-/**
- * Poll the Solana received PDA to confirm on-chain delivery.
- *
- * The `received` PDA is created by the HelloExecutor program when it processes
- * the VAA. Its existence proves that:
- *  1. The Executor posted the VAA to Wormhole Core Bridge on Solana
- *  2. HelloExecutor's receive_greeting instruction executed successfully
- *  3. Replay protection is now in place for this (chain, sequence) pair
- *
- * Seeds: ["received", emitter_chain_le_u16, sequence_le_u64]
- */
-async function pollSolanaDelivery(
-    emitterChain: number,  // Wormhole chain ID of the sender (10002 for Sepolia)
-    sequence: bigint,      // VAA sequence from the GreetingSent event
-    timeoutMs = 120_000,
-): Promise<{ delivered: boolean; pdaAddress: string }> {
-    const connection = new Connection(SOLANA_RPC, 'confirmed');
-    const programId = new PublicKey(SOLANA_PROGRAM_ID);
-
-    const chainBuffer = Buffer.alloc(2);
-    chainBuffer.writeUInt16LE(emitterChain);
-    const seqBuffer = Buffer.alloc(8);
-    seqBuffer.writeBigUInt64LE(sequence);
-
-    const [receivedPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('received'), chainBuffer, seqBuffer],
-        programId,
-    );
-    const pdaAddress = receivedPda.toBase58();
-
-    console.log(`\nPolling Solana received PDA: ${pdaAddress}`);
-    console.log(`   (chain=${emitterChain}, seq=${sequence})`);
-
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        process.stdout.write('.');
-        const info = await connection.getAccountInfo(receivedPda).catch(() => null);
-        if (info) {
-            console.log('\nDelivered on Solana! received PDA exists.');
-            return { delivered: true, pdaAddress };
-        }
-        await new Promise(r => setTimeout(r, 5000));
-    }
-
-    console.log('\nTimed out waiting for Solana delivery — PDA not yet created.');
-    console.log(`   Check manually: solana account ${pdaAddress} --url devnet`);
-    return { delivered: false, pdaAddress };
 }
 
 async function main() {
@@ -281,22 +226,13 @@ async function main() {
         }
     }
 
-    // Independently verify on-chain delivery by checking the Solana received PDA.
-    // This is the ground truth: PDA existence proves receive_greeting ran successfully.
-    if (vaaSequence !== undefined) {
-        const result = await pollSolanaDelivery(CHAIN_ID_SEPOLIA, vaaSequence);
-        if (result.delivered) {
-            console.log(`   received PDA: ${result.pdaAddress}`);
-            console.log(`   Explorer: https://explorer.solana.com/account/${result.pdaAddress}?cluster=devnet`);
-        }
-    } else {
-        console.log('\nCould not parse GreetingSent event — skipping Solana delivery check');
-    }
 
     console.log('\n' + '─'.repeat(60));
     console.log('Links:');
     console.log(`  Sepolia TX:  https://sepolia.etherscan.io/tx/${tx.hash}`);
-    console.log(`  Wormholescan: https://wormholescan.io/#/tx/${tx.hash}?network=Testnet`);
+    const wormholescanNetwork = NETWORK === 'mainnet' ? 'Mainnet' : 'Testnet';
+    console.log(`  Wormholescan: https://wormholescan.io/#/tx/${tx.hash}?network=${wormholescanNetwork}`);
+    console.log('  (Wormholescan shows full cross-chain delivery status including Solana)');
 }
 
 main().catch(console.error);
