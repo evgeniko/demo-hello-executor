@@ -107,6 +107,11 @@ Relay Instructions:`);
     };
 }
 
+// Executor API terminal states:
+//   "submitted" + txs[] → delivered (note: "completed" is never emitted)
+//   "error" / "aborted" → relay failed
+//   "underpaid"         → insufficient payment
+// Non-terminal: "pending", "processing"
 async function checkStatus(txHash: string): Promise<ExecutorStatusItem | null> {
     const response = await fetch(`${EXECUTOR_API}/status/tx`, {
         method: 'POST',
@@ -193,13 +198,7 @@ async function main() {
         } catch {}
     }
 
-    // Poll executor status.
-    // The Executor API terminal states are:
-    //   "submitted" + txs[] → relay TX included on destination chain (success)
-    //   "error"             → relay failed (execution reverted, etc.)
-    //   "underpaid"         → insufficient payment
-    // Non-terminal: "pending", "processing".
-    // Note: the Executor never emits "completed"; "submitted" is the delivered state.
+    // Poll until executor delivers ("submitted" + txs[]) or fails
     console.log('\nWaiting for Executor relay...');
     let executorDelivered = false;
     for (let i = 0; i < 24; i++) { // 2 minutes max
