@@ -25,12 +25,14 @@ const SOLANA_RPC = process.env.SOLANA_DEVNET_RPC || 'https://api.devnet.solana.c
 // HelloExecutor Solana program ID — receives the message
 const SOLANA_PROGRAM_ID = process.env.HELLO_EXECUTOR_SOLANA_PROGRAM_ID || '7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG';
 
-// Chain IDs
+// Wormhole chain IDs — full reference: https://wormhole.com/docs/products/reference/chain-ids/
 const CHAIN_ID_SOLANA = 1;
-const CHAIN_ID_SEPOLIA = 10002;
+const CHAIN_ID_SEPOLIA = 10002; // update this when targeting a different EVM chain
 
 // Executor API
-const EXECUTOR_API = 'https://executor-testnet.labsapis.com/v0';
+// Testnet: https://executor-testnet.labsapis.com/v0
+// Mainnet: https://executor.labsapis.com/v0
+const EXECUTOR_API = process.env.EXECUTOR_API_URL || 'https://executor-testnet.labsapis.com/v0';
 
 // Solana-specific: msgValue in LAMPORTS for rent, priority fees, etc.
 // Based on NTT demo: 10_000_000 + 1_500_000 = 11,500,000 lamports (~0.0115 SOL)
