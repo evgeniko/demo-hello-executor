@@ -111,7 +111,7 @@ Relay Instructions:`);
 //   "submitted" + txs[] → delivered (note: "completed" is never emitted)
 //   "error" / "aborted" → relay failed
 //   "underpaid"         → insufficient payment
-// Non-terminal: "pending", "processing"
+// Still in progress: "pending", "processing"
 async function checkStatus(txHash: string): Promise<ExecutorStatusItem | null> {
     const response = await fetch(`${EXECUTOR_API}/status/tx`, {
         method: 'POST',
