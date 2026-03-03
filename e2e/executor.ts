@@ -129,37 +129,19 @@ export async function getExecutorQuote(
             params.relayInstructions
         );
 
-        // The API only returns signedQuote, not estimatedCost
-        // We need to parse the quote and calculate the cost ourselves
-        const signedQuote = quote.signedQuote as string;
-        
-        let estimatedCost: string | undefined;
-        try {
-            const parsedQuote = parseSignedQuote(signedQuote);
-            // Use a default gas limit for the estimate (can be overridden later)
-            const defaultGasLimit = 500000n;
-            const cost = calculateEstimatedCost(parsedQuote, defaultGasLimit);
-            estimatedCost = cost.toString();
-            
-            console.log('\nQuote received:');
-            console.log('  Signed quote:', signedQuote.substring(0, 30) + '...');
-            console.log('  Parsed quote params:');
-            console.log('    baseFee:', parsedQuote.baseFee.toString());
-            console.log('    dstGasPrice:', parsedQuote.dstGasPrice.toString());
-            console.log('    srcPrice:', parsedQuote.srcPrice.toString());
-            console.log('    dstPrice:', parsedQuote.dstPrice.toString());
-            console.log('  Estimated cost (500k gas):', estimatedCost, 'wei');
-            console.log('                          =', Number(cost) / 1e18, 'ETH');
-        } catch (parseError) {
-            console.warn('Could not parse quote for cost estimate:', parseError);
-            console.log('\nQuote received:');
-            console.log('  Signed quote:', signedQuote.substring(0, 30) + '...');
-            console.log('  Estimated cost: unknown (parse failed)');
-        }
+        // The API returns both signedQuote and estimatedCost
+        const estimatedCost = quote.estimatedCost;
+
+        console.log('\n💰 Quote received:');
+        console.log(
+            '  Signed quote:',
+            quote.signedQuote.substring(0, 20) + '...'
+        );
+        console.log('  Estimated cost:', estimatedCost, 'wei');
 
         return {
-            signedQuote,
-            estimatedCost,
+            signedQuote: quote.signedQuote,
+            estimatedCost: estimatedCost,
         };
     } catch (error: any) {
         console.error('❌ Error getting Executor quote:', error);

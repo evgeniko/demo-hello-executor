@@ -62,11 +62,9 @@ contract SetupSolanaPeerScript is Script {
             solanaEmitterPda = DEFAULT_SOLANA_EMITTER_PDA;
         }
 
-        console.log("Setting up Solana peer on Sepolia HelloWormhole");
-        console.log("Local contract:", localContract);
-        console.log("Solana program ID (bytes32):", vm.toString(solanaProgramId));
-        console.log("Solana emitter PDA (bytes32):", vm.toString(solanaEmitterPda));
-        console.log("Wormhole chain ID:", CHAIN_ID_SOLANA);
+        console.log("Setting up Solana peer on HelloWormhole:", localContract);
+        console.log("  programId:", vm.toString(solanaProgramId));
+        console.log("  emitterPDA:", vm.toString(solanaEmitterPda));
 
         vm.startBroadcast();
 
@@ -78,9 +76,7 @@ contract SetupSolanaPeerScript is Script {
         // Register emitter PDA for incoming VAA verification
         hello.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPda);
 
-        console.log("Solana peer set successfully!");
-        console.log("  peers[1]      = program ID  (for executor routing)");
-        console.log("  vaaEmitters[1] = emitter PDA (for VAA verification)");
+        console.log("Done.");
 
         vm.stopBroadcast();
     }

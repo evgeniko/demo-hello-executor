@@ -143,8 +143,8 @@ async function main() {
         } else if (relayTx && relayTx.status === 'submitted' && relayTx.txs?.length) {
             // "submitted" + txs[] = relay TX included on destination chain (success state)
             console.log('\n✅ Executor successfully relayed the transaction!');
-            console.log(`   Destination TX: ${relayTx.txs[0]?.txHash ?? relayTx.txHash}`);
-            console.log(`   Block: ${relayTx.txs[0]?.blockNumber ?? relayTx.blockNumber}`);
+            console.log(`   Destination TX: ${relayTx.txs[0].txHash}`);
+            console.log(`   Block: ${relayTx.txs[0].blockNumber}`);
         }
     } else if (executorStatus.error || executorStatus.status === 'timeout') {
         console.log('\n⚠️  Executor issue detected!');
