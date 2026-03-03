@@ -5,6 +5,7 @@ import {ExecutorSendReceiveQuoteOffChain, InvalidPeer} from "wormhole-solidity-s
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
+import {CHAIN_ID_SOLANA} from "wormhole-solidity-sdk/constants/Chains.sol";
 
 contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
     using SequenceReplayProtectionLib for *;
@@ -80,8 +81,19 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
         if (msg.value > 0) {
             revert NoValueAllowed();
         }
-        // Decode the payload to extract the greeting message
-        string memory greeting = string(payload);
+
+        // Decode the payload to extract the greeting message.
+        // Solana payloads use a tagged format: 0x01 | u16_BE(len) | utf8 message.
+        // EVM payloads are raw UTF-8 bytes. Strip the header only for Solana senders.
+        string memory greeting;
+        if (peerChain == CHAIN_ID_SOLANA) {
+            require(payload.length >= 3 && payload[0] == 0x01, "HelloWormhole: expected Solana Hello payload");
+            uint16 len = (uint16(uint8(payload[1])) << 8) | uint16(uint8(payload[2]));
+            require(payload.length == 3 + uint256(len), "HelloWormhole: payload length mismatch");
+            greeting = string(payload[3:]);
+        } else {
+            greeting = string(payload);
+        }
 
         // Emit an event with the greeting message and sender details
         emit GreetingReceived(greeting, peerChain, peerAddress);
