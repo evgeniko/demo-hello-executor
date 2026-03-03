@@ -34,6 +34,11 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
     event GreetingSent(string greeting, uint16 targetChain, uint64 sequence);
 
     error NoValueAllowed();
+    error PayloadTooLargeForSolana(uint256 length, uint256 maxLength);
+
+    // Solana's receive_greeting enforces a 512-byte cap on the message payload.
+    // Enforce it here so callers don't pay a relay fee for a delivery that will fail.
+    uint256 private constant SOLANA_MAX_PAYLOAD_BYTES = 512;
 
     function _getPeer(uint16 chainId) internal view override returns (bytes32) {
         return peers[chainId];
@@ -111,6 +116,12 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
         // Encode the greeting as bytes
         bytes memory payload = bytes(greeting);
 
+        // Solana enforces a 512-byte cap on incoming messages; fail early so the
+        // relay fee is not spent on a delivery that will be rejected on Solana.
+        if (targetChain == CHAIN_ID_SOLANA && payload.length > SOLANA_MAX_PAYLOAD_BYTES) {
+            revert PayloadTooLargeForSolana(payload.length, SOLANA_MAX_PAYLOAD_BYTES);
+        }
+
         // Publish and relay the message to the target chain
         sequence = _publishAndRelay(
             payload,
@@ -136,6 +147,12 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
     ) external payable returns (uint64 sequence) {
         // Encode the greeting as bytes
         bytes memory payload = bytes(greeting);
+
+        // Solana enforces a 512-byte cap on incoming messages; fail early so the
+        // relay fee is not spent on a delivery that will be rejected on Solana.
+        if (targetChain == CHAIN_ID_SOLANA && payload.length > SOLANA_MAX_PAYLOAD_BYTES) {
+            revert PayloadTooLargeForSolana(payload.length, SOLANA_MAX_PAYLOAD_BYTES);
+        }
 
         // Publish and relay the message to the target chain
         sequence = _publishAndRelay(

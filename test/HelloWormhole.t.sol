@@ -109,6 +109,22 @@ contract HelloWormholeTest is Test {
         assertEq(helloWormholeSepolia.vaaEmitters(CHAIN_ID_SOLANA), solanaEmitterPda);
     }
 
+    function test_SendGreetingRevertsWhenPayloadExceedsSolanaLimit() public {
+        vm.selectFork(sepoliaFork);
+
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+
+        // 513-byte string — one byte over the 512-byte Solana cap
+        string memory tooBig = string(new bytes(513));
+
+        vm.deal(address(this), 1 ether);
+        vm.expectRevert(abi.encodeWithSelector(HelloWormhole.PayloadTooLargeForSolana.selector, 513, 512));
+        helloWormholeSepolia.sendGreetingWithMsgValue{value: 0.01 ether}(
+            tooBig, CHAIN_ID_SOLANA, 500_000, 15_000_000, 0.01 ether, ""
+        );
+    }
+
     function test_ExecuteVaaSolanaPayloadStripsHeader() public {
         vm.selectFork(sepoliaFork);
 
