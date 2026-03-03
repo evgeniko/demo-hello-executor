@@ -18,6 +18,8 @@ dotenv.config({ path: join(__dirname, '.env') });
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
 const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x15cEeB2C089D19E754463e1697d69Ad11A6e8841';
 const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
+// TODO: adjust if you need a different Solana RPC (e.g. mainnet or a private endpoint)
+const SOLANA_RPC = 'https://api.devnet.solana.com';
 
 // Wormhole chain IDs — full reference: https://wormhole.com/docs/products/reference/chain-ids/
 const CHAIN_ID_SOLANA = 1;
