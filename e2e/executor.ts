@@ -150,23 +150,6 @@ export async function getExecutorQuote(
     }
 }
 
-/**
- * Get a quote with a specific gas limit and calculate the exact cost
- */
-export async function getExecutorQuoteWithCost(
-    params: ExecutorQuoteParams & { gasLimit: bigint },
-    network: Network = 'Testnet'
-): Promise<ExecutorQuote & { parsedQuote: ReturnType<typeof parseSignedQuote> }> {
-    const quote = await getExecutorQuote(params, network);
-    const parsedQuote = parseSignedQuote(quote.signedQuote);
-    const estimatedCost = calculateEstimatedCost(parsedQuote, params.gasLimit);
-    
-    return {
-        ...quote,
-        estimatedCost: estimatedCost.toString(),
-        parsedQuote,
-    };
-}
 
 /**
  * Check transaction status via Executor API

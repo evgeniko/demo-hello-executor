@@ -18,8 +18,6 @@ dotenv.config({ path: join(__dirname, '.env') });
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
 const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x15cEeB2C089D19E754463e1697d69Ad11A6e8841';
 const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
-// TODO: adjust if you need a different Solana RPC (e.g. mainnet or a private endpoint)
-const SOLANA_RPC = 'https://api.devnet.solana.com';
 
 // Wormhole chain IDs — full reference: https://wormhole.com/docs/products/reference/chain-ids/
 const CHAIN_ID_SOLANA = 1;
@@ -67,13 +65,7 @@ async function getExecutorQuote(
     // Create relay instructions with gasLimit and msgValue
     // For Solana destinations, msgValue should be in LAMPORTS
     const relayInstructions = createRelayInstructions(BigInt(gasLimit), msgValueLamports);
-    
-    console.log(`
-Relay Instructions:`);
-    console.log(`   gasLimit: ${gasLimit} (compute units)`);
-    console.log(`   msgValue: ${msgValueLamports} lamports (${Number(msgValueLamports) / 1e9} SOL)`);
-    console.log(`   encoded:  ${relayInstructions}`);
-    
+
     const response = await fetch(`${EXECUTOR_API}/quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,7 +73,7 @@ Relay Instructions:`);
             srcChain, 
             dstChain, 
             gasLimit,
-            relayInstructions,  // Include relay instructions for proper quote
+            relayInstructions,
         }),
     });
 
@@ -91,16 +83,10 @@ Relay Instructions:`);
 
     const data = (await response.json()) as QuoteResponse;
     
-    // Parse quote for debugging/logging
     const parsed = parseSignedQuote(data.signedQuote);
     
-    // Use the API's estimatedCost if available - it includes msgValue properly
-    // Only fall back to our calculation if API doesn't provide it
     const apiEstimatedCost = data.estimatedCost ? BigInt(data.estimatedCost) : null;
     const calculatedCost = calculateEstimatedCost(parsed, BigInt(gasLimit));
-    
-    console.log(`   API estimatedCost: ${apiEstimatedCost ? apiEstimatedCost.toString() : 'not provided'}`);
-    console.log(`   Our calculation: ${calculatedCost.toString()}`);
     
     return {
         ...data,

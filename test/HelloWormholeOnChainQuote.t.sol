@@ -151,12 +151,10 @@ contract HelloWormholeOnChainQuoteTest is Test {
         // Fund the test contract
         vm.deal(address(this), totalCost);
 
-        // Send greeting — verify it doesn't revert and returns a valid sequence
+        // Verify the call succeeds without reverting and returns a sequence number
         uint64 sequence = helloWormholeSepolia.sendGreeting{value: totalCost}(
             "Hello!", CHAIN_ID_BASE_SEPOLIA, 200000, totalCost, QUOTER_ADDRESS
         );
-
-        // Sequence is assigned by the Wormhole Core Bridge; just verify the call succeeded
-        assertTrue(sequence >= 0, "Send greeting completed successfully");
+        assertTrue(sequence < type(uint64).max);
     }
 }
