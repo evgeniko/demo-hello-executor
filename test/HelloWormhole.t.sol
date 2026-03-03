@@ -10,11 +10,7 @@ import {CHAIN_ID_SEPOLIA, CHAIN_ID_BASE_SEPOLIA, CHAIN_ID_SOLANA} from "wormhole
 contract HelloWormholeHarness is HelloWormhole {
     constructor(address coreBridge, address executor) HelloWormhole(coreBridge, executor) {}
 
-    function executeVaa(
-        bytes calldata payload,
-        uint16 peerChain,
-        bytes32 peerAddress
-    ) external {
+    function executeVaa(bytes calldata payload, uint16 peerChain, bytes32 peerAddress) external {
         _executeVaa(payload, 0, peerChain, peerAddress, 0, 0);
     }
 }
@@ -119,11 +115,7 @@ contract HelloWormholeTest is Test {
         // Simulate a Solana Hello payload: 0x01 | u16_BE(len) | utf8 message
         string memory message = "GM from Berlin from Chain Solana";
         bytes memory msgBytes = bytes(message);
-        bytes memory payload = abi.encodePacked(
-            uint8(0x01),
-            uint16(msgBytes.length),
-            msgBytes
-        );
+        bytes memory payload = abi.encodePacked(uint8(0x01), uint16(msgBytes.length), msgBytes);
 
         bytes32 emitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
 
