@@ -19,19 +19,14 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - sendGreeting takes `quoterAddress` instead of `signedQuote`
  * - Provides `quoteGreeting()` for on-chain cost estimation
  *
- * ## EVM-only
- * On-chain quotes are currently supported for EVM destination chains only.
+ * EVM-only: on-chain quotes are currently supported for EVM destination chains only.
  * For EVM → Solana, use HelloWormhole (off-chain signed quotes) instead.
- * SVM support will be added in a future update once the on-chain quoter
- * supports Solana pricing.
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
     using SequenceReplayProtectionLib for *;
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
-    // peers[chainId]: the deployed HelloWormholeOnChainQuote contract address on that chain
-    //   (left-padded to bytes32). EVM chains only — see contract NatSpec.
     mapping(uint16 => bytes32) public peers;
 
     constructor(address coreBridge, address executorQuoterRouter)
@@ -50,7 +45,6 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         return peers[chainId];
     }
 
-    /// @notice Register the peer contract address for a destination EVM chain.
     function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) {
         peers[chainId] = peerAddress;
     }
@@ -83,14 +77,16 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         if (msg.value > 0) {
             revert NoValueAllowed();
         }
+        // Decode the payload to extract the greeting message
         string memory greeting = string(payload);
+
+        // Emit an event with the greeting message and sender details
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
     /**
      * @notice Get a quote for sending a greeting using on-chain quoter
-     * @dev EVM destinations only. SVM destination support via on-chain quoter
-     *      is not yet verified — use HelloWormhole for EVM→Solana.
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
      * @param quoterAddress The on-chain quoter contract address
@@ -104,25 +100,33 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         bytes32 peerAddress = peers[targetChain];
         require(peerAddress != bytes32(0), "No peer set for target chain");
 
+        // Build relay instructions
         bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, 0);
 
+        // Build request bytes (same format as _publishAndCompose uses)
         bytes memory requestBytes = RequestLib.encodeVaaMultiSigRequest(
             _chainId,
             toUniversalAddress(address(this)),
             0 // sequence placeholder - not needed for quote
         );
 
+        // Get executor quote from on-chain quoter
         uint256 executorFee = _executorQuoterRouter.quoteExecution(
-            targetChain, peerAddress, address(0), quoterAddress, requestBytes, relayInstructions
+            targetChain,
+            peerAddress,
+            address(0), // refund address not needed for quote
+            quoterAddress,
+            requestBytes,
+            relayInstructions
         );
 
+        // Total = executor fee + Wormhole message fee
         totalCost = executorFee + _coreBridge.messageFee();
     }
 
     /**
      * @notice Send a cross-chain greeting using on-chain quote
-     * @dev EVM destinations only. SVM destination support via on-chain quoter
-     *      is not yet verified — use HelloWormhole for EVM→Solana.
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
@@ -137,17 +141,22 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         uint256 totalCost,
         address quoterAddress
     ) external payable returns (uint64 sequence) {
+        // Encode the greeting as bytes
+        bytes memory payload = bytes(greeting);
+
+        // Publish and relay the message to the target chain using on-chain quote
         sequence = _publishAndRelay(
-            bytes(greeting),
+            payload,
             CONSISTENCY_LEVEL_INSTANT,
             totalCost,
             targetChain,
-            msg.sender,
-            quoterAddress,
+            msg.sender, // refund address
+            quoterAddress, // on-chain quoter instead of signedQuote
             gasLimit,
-            0,
-            ""
+            0, // no msg.value forwarding
+            "" // no extra relay instructions
         );
+
         emit GreetingSent(greeting, targetChain, sequence);
     }
 }

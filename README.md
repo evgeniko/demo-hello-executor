@@ -15,6 +15,8 @@ This repo covers two use cases:
 | `HelloWormhole`             | Off-chain (API) | `ExecutorSendReceiveQuoteOffChain` | `executor`             |
 | `HelloWormholeOnChainQuote` | On-chain        | `ExecutorSendReceiveQuoteOnChain`  | `executorQuoterRouter` |
 
+### Key Differences
+
 **Off-chain quotes** require fetching a `signedQuote` from the Executor API before sending:
 
 ```solidity
@@ -30,7 +32,6 @@ function sendGreeting(..., address quoterAddress) external payable;
 
 > **Note:** On-chain quotes currently support EVM destination chains only.
 > For EVM → Solana, use `HelloWormhole` (off-chain signed quotes) instead.
-> Solana support will be added once the on-chain quoter supports SVM pricing.
 
 ## Deployed Contracts (Testnet)
 
@@ -48,13 +49,9 @@ forge install   # Solidity dependencies
 npm install     # TypeScript/E2E dependencies
 ```
 
----
+## Building an Executor Integration
 
-## EVM ↔ EVM
-
-### Building an Executor Integration
-
-#### 1. Choose Your Base Contract
+### 1. Choose Your Base Contract
 
 ```solidity
 // Off-chain quotes (requires API call for signedQuote)
@@ -69,7 +66,7 @@ import {ExecutorSendReceiveQuoteBoth} from "wormhole-solidity-sdk/Executor/Integ
 
 Also available: `ExecutorSendQuote*` (send-only) and `ExecutorReceive` (receive-only) variants.
 
-#### 2. Implement Constructor
+### 2. Implement Constructor
 
 ```solidity
 // Off-chain: pass executor address
@@ -81,7 +78,7 @@ constructor(address coreBridge, address executorQuoterRouter)
     ExecutorSendReceiveQuoteOnChain(coreBridge, executorQuoterRouter) {}
 ```
 
-#### 3. Implement Required Functions
+### 3. Implement Required Functions
 
 ```solidity
 // Peer management
@@ -103,7 +100,7 @@ function _executeVaa(bytes calldata payload, uint32, uint16 peerChain, bytes32 p
 }
 ```
 
-#### 4. Send Messages
+### 4. Send Messages
 
 ```solidity
 // Off-chain quote version
@@ -115,10 +112,23 @@ sequence = _publishAndRelay(payload, consistencyLevel, totalCost, targetChain, r
     quoterAddress, gasLimit, msgVal, extraInstructions);
 ```
 
-### Deployment
+## Testing
 
 ```bash
-# Deploy
+forge test -vvv                                    # All tests
+forge test --match-contract HelloWormholeOnChainQuoteTest -vvv  # On-chain quote tests only
+```
+
+## Deployment
+
+```bash
+# Set environment
+export PRIVATE_KEY=0x...
+export ETHERSCAN_API_KEY=...
+export SEPOLIA_RPC_URL=https://...
+export BASE_SEPOLIA_RPC_URL=https://...
+
+# Deploy (auto-detects chain and uses correct addresses)
 forge script script/HelloWormholeOnChainQuote.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify
 forge script script/HelloWormholeOnChainQuote.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --verify
 
@@ -127,13 +137,13 @@ forge script script/SetupPeersOnChainQuote.s.sol --rpc-url $SEPOLIA_RPC_URL --br
 forge script script/SetupPeersOnChainQuote.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
 ```
 
-### E2E Testing
+## E2E Testing
 
 ```bash
 cd e2e
 cp .env.example .env  # Fill in private keys and contract addresses
-npx tsx test.ts              # Off-chain quote (Sepolia → Base Sepolia)
-npx tsx testOnChainQuote.ts  # On-chain quote  (Sepolia → Base Sepolia)
+npx tsx testOnChainQuote.ts  # On-chain quote E2E
+npx tsx test.ts              # Off-chain quote E2E
 ```
 
 ---
@@ -183,9 +193,8 @@ sequence = sendGreetingWithMsgValue(
 );
 ```
 
-> **Message size limit:** The Solana receiver enforces a **512-byte** max on greeting messages
-> (`GREETING_MAX_LENGTH` in `receive_greeting.rs`). Messages longer than 512 bytes will be
-> accepted on Sepolia but fail on Solana with `InvalidMessage`.
+> **Message size limit:** The Solana receiver enforces a **512-byte** max on greeting messages.
+> Messages longer than 512 bytes will revert on Sepolia with `PayloadTooLargeForSolana`.
 
 ### Deployment
 
@@ -207,13 +216,6 @@ npx tsx sendToSolana.ts      # EVM → Solana
 ```
 
 ---
-
-## Testing
-
-```bash
-forge test -vvv                                                  # All tests
-forge test --match-contract HelloWormholeOnChainQuoteTest -vvv   # On-chain quote tests only
-```
 
 ## Key Concepts
 
