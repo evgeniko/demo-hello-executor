@@ -133,10 +133,11 @@ async function main() {
                 `   https://wormholelabs-xyz.github.io/executor-explorer/#/tx/${receipt.hash}?endpoint=https%3A%2F%2Fexecutor-testnet.labsapis.com&env=Testnet`
             );
             process.exit(1);
-        } else if (relayTx && relayTx.status === 'completed') {
+        } else if (relayTx && relayTx.status === 'submitted' && relayTx.txs?.length) {
+            // "submitted" + txs[] = relay TX included on destination chain (success state)
             console.log('\n✅ Executor successfully relayed the transaction!');
-            console.log(`   Destination TX: ${relayTx.txHash}`);
-            console.log(`   Block: ${relayTx.blockNumber}`);
+            console.log(`   Destination TX: ${relayTx.txs[0].txHash}`);
+            console.log(`   Block: ${relayTx.txs[0].blockNumber}`);
         }
     } else if (executorStatus.error || executorStatus.status === 'timeout') {
         console.log('\n⚠️  Executor issue detected!');

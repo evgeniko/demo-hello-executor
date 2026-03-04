@@ -41,6 +41,63 @@ export async function getExecutorCapabilities(
 }
 
 /**
+ * Parse the signed quote bytes to extract cost parameters
+ * 
+ * EQ01 Quote Layout (from SDK signedQuoteLayout):
+ * - [0-4]    prefix (EQ01)
+ * - [4-24]   quoterAddress (20 bytes)
+ * - [24-56]  payeeAddress (32 bytes)
+ * - [56-58]  srcChain (uint16 BE)
+ * - [58-60]  dstChain (uint16 BE)
+ * - [60-68]  expiryTime (uint64 BE)
+ * - [68-76]  baseFee (uint64 BE)
+ * - [76-84]  dstGasPrice (uint64 BE)
+ * - [84-92]  srcPrice (uint64 BE)
+ * - [92-100] dstPrice (uint64 BE)
+ * - [100-165] signature (65 bytes)
+ */
+export function parseSignedQuote(signedQuoteHex: string): {
+    baseFee: bigint;
+    dstGasPrice: bigint;
+    srcPrice: bigint;
+    dstPrice: bigint;
+} {
+    // Remove 0x prefix if present
+    const hex = signedQuoteHex.startsWith('0x') ? signedQuoteHex.slice(2) : signedQuoteHex;
+    const bytes = Buffer.from(hex, 'hex');
+    
+    // Verify prefix
+    const prefix = bytes.slice(0, 4).toString('ascii');
+    if (prefix !== 'EQ01') {
+        throw new Error(`Invalid quote prefix: ${prefix}, expected EQ01`);
+    }
+    
+    // Parse big-endian uint64 values
+    const baseFee = bytes.readBigUInt64BE(68);
+    const dstGasPrice = bytes.readBigUInt64BE(76);
+    const srcPrice = bytes.readBigUInt64BE(84);
+    const dstPrice = bytes.readBigUInt64BE(92);
+    
+    return { baseFee, dstGasPrice, srcPrice, dstPrice };
+}
+
+/**
+ * Calculate the estimated cost from quote parameters
+ * Formula: baseFee + (gasLimit * dstGasPrice * srcPrice / dstPrice)
+ */
+export function calculateEstimatedCost(
+    quote: { baseFee: bigint; dstGasPrice: bigint; srcPrice: bigint; dstPrice: bigint },
+    gasLimit: bigint
+): bigint {
+    if (quote.dstPrice === 0n) {
+        throw new Error('Invalid quote: dstPrice is 0');
+    }
+    
+    const relayCost = (gasLimit * quote.dstGasPrice * quote.srcPrice) / quote.dstPrice;
+    return quote.baseFee + relayCost;
+}
+
+/**
  * Get a quote from the Executor API using SDK's fetchQuote function
  *
  * The Executor provides automatic cross-chain message delivery.

@@ -2,6 +2,10 @@
 
 Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** and **on-chain** quote methods.
 
+This repo covers two use cases:
+- **EVM ↔ EVM** — both off-chain and on-chain quotes, Sepolia ↔ Base Sepolia
+- **EVM ↔ Solana** — off-chain quotes only (see [Cross-VM section](#cross-vm-evm--solana))
+
 > **License:** Code provided "AS IS", without warranties. Audit before mainnet deployment.
 
 ## Contracts
@@ -25,6 +29,9 @@ function sendGreeting(..., bytes calldata signedQuote) external payable;
 function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddress) external view returns (uint256);
 function sendGreeting(..., address quoterAddress) external payable;
 ```
+
+> **Note:** On-chain quotes currently support EVM destination chains only.
+> For EVM → Solana, use `HelloWormhole` (off-chain signed quotes) instead.
 
 ## Deployed Contracts (Testnet)
 
@@ -139,6 +146,77 @@ npx tsx testOnChainQuote.ts  # On-chain quote E2E
 npx tsx test.ts              # Off-chain quote E2E
 ```
 
+---
+
+## Cross-VM: EVM ↔ Solana
+
+Uses `HelloWormhole` (off-chain quotes) — on-chain quotes do not yet support Solana destinations.
+
+See the [Solana demo repo](https://github.com/wormhole-foundation/demo-hello-executor-solana) for the Solana-side implementation.
+
+### Peer Registration
+
+For EVM ↔ Solana, peer registration on the EVM side requires **two separate addresses** because the Executor uses `peers[chainId]` as a routing address (must be an executable program), while incoming VAAs carry the **emitter PDA** as their source:
+
+```solidity
+// 1. Program ID → executor routing (must be an executable account on Solana)
+hello.setPeer(CHAIN_ID_SOLANA, solanaProgramIdBytes32);
+
+// 2. Emitter PDA → VAA verification (PDA(["emitter"], programId))
+hello.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPdaBytes32);
+```
+
+Run `script/SetupSolanaPeer.s.sol` to register both in one step. For EVM↔EVM, only `setPeer()` is needed.
+
+Derive both Solana addresses from your program ID:
+```typescript
+const programId = new PublicKey("7eiTqf1b1dNwpzn27qEr4eGSWnuon2fJTbnTuWcFifZG");
+const [emitterPda] = PublicKey.findProgramAddressSync([Buffer.from("emitter")], programId);
+
+const programIdBytes32  = '0x' + Buffer.from(programId.toBytes()).toString('hex');
+const emitterPdaBytes32 = '0x' + Buffer.from(emitterPda.toBytes()).toString('hex');
+```
+
+### Sending to Solana
+
+Use `sendGreetingWithMsgValue` with `msgValue` in **lamports** to cover rent and fees on Solana:
+
+```solidity
+// msgValue covers rent + fees on Solana (~0.015 SOL = 15_000_000 lamports)
+sequence = sendGreetingWithMsgValue(
+    greeting,
+    1,              // Wormhole chain ID for Solana
+    500000,         // compute units (not gas)
+    15_000_000,     // msgValue in lamports
+    totalCost,
+    signedQuote
+);
+```
+
+> **Message size limit:** The Solana receiver enforces a **512-byte** max on greeting messages.
+> Messages longer than 512 bytes will revert on Sepolia with `PayloadTooLargeForSolana`.
+
+### Deployment
+
+```bash
+# Deploy HelloWormhole (cross-VM variant)
+forge script script/HelloWormhole.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify
+
+# Register Solana as a peer (both program ID and emitter PDA)
+forge script script/SetupSolanaPeer.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+### E2E Testing
+
+```bash
+cd e2e
+cp .env.example .env  # Fill in HELLO_WORMHOLE_SEPOLIA_CROSSVM and Solana peer addresses
+npx tsx sendToSolana.ts      # EVM → Solana
+# For Solana → EVM, run sendToSepolia.ts from the Solana demo repo
+```
+
+---
+
 ## Key Concepts
 
 | Concept                 | Description                                                                  |
@@ -152,3 +230,4 @@ npx tsx test.ts              # Off-chain quote E2E
 - [Wormhole Docs](https://wormhole.com/docs)
 - [Solidity SDK](https://github.com/wormhole-foundation/wormhole-solidity-sdk)
 - [Executor Documentation](https://wormhole.com/docs/protocol/infrastructure/relayer/#executor)
+- [Solana demo repo](https://github.com/wormhole-foundation/demo-hello-executor-solana)

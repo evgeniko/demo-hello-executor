@@ -18,6 +18,9 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - Uses `executorQuoterRouter` instead of `executor` address
  * - sendGreeting takes `quoterAddress` instead of `signedQuote`
  * - Provides `quoteGreeting()` for on-chain cost estimation
+ *
+ * EVM-only: on-chain quotes are currently supported for EVM destination chains only.
+ * For EVM → Solana, use HelloWormhole (off-chain signed quotes) instead.
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
     using SequenceReplayProtectionLib for *;
@@ -83,6 +86,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     /**
      * @notice Get a quote for sending a greeting using on-chain quoter
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
      * @param quoterAddress The on-chain quoter contract address
@@ -122,6 +126,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     /**
      * @notice Send a cross-chain greeting using on-chain quote
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
