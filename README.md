@@ -142,7 +142,7 @@ npx tsx testOnChainQuote.ts  # On-chain quote  (Sepolia → Base Sepolia)
 
 Uses `HelloWormhole` (off-chain quotes) — on-chain quotes do not yet support Solana destinations.
 
-See the [Solana demo repo](https://github.com/evgeniko/demo-hello-executor-solana) for the Solana-side implementation.
+See the [Solana demo repo](https://github.com/wormhole-foundation/demo-hello-executor-solana) for the Solana-side implementation.
 
 ### Peer Registration
 
@@ -228,4 +228,4 @@ forge test --match-contract HelloWormholeOnChainQuoteTest -vvv   # On-chain quot
 - [Wormhole Docs](https://wormhole.com/docs)
 - [Solidity SDK](https://github.com/wormhole-foundation/wormhole-solidity-sdk)
 - [Executor Documentation](https://wormhole.com/docs/protocol/infrastructure/relayer/#executor)
-- [Solana demo repo](https://github.com/evgeniko/demo-hello-executor-solana)
+- [Solana demo repo](https://github.com/wormhole-foundation/demo-hello-executor-solana)
